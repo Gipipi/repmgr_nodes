@@ -1,0 +1,85 @@
+# docker compose file for 3 pg18 nodes under debian 13
+
+services:
+    postgresql1:
+      build: .
+      container_name: postgresql1
+      hostname: postgresql1
+      restart: always
+      volumes:
+        - ./init-pg.sh:/init-pg.sh:ro
+        - ./volumes/postgresql1/db:/var/lib/postgresql
+        - ./volumes/postgresql1/conf:/etc/postgresql
+        - shared-keys:/shared-keys
+      ports:
+        - "5440:5432"
+        - "2240:22"
+      networks:
+        - postgresql_network
+      environment:
+        POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+        POSTGRES_USER: postgres
+        POSTGRES_DB: postgres
+        LANG: en_US.utf8
+      command: /bin/bash /init-pg.sh
+      secrets:
+        - postgres_password
+
+    postgresql2:
+      build: .
+      container_name: postgresql2
+      hostname: postgresql2
+      restart: always
+      volumes:
+        - ./init-pg.sh:/init-pg.sh:ro
+        - ./volumes/postgresql2/db:/var/lib/postgresql
+        - ./volumes/postgresql2/conf:/etc/postgresql
+        - shared-keys:/shared-keys
+      ports:
+        - "5441:5432"
+        - "2241:22"
+      networks:
+        - postgresql_network
+      environment:
+        POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+        POSTGRES_USER: postgres
+        POSTGRES_DB: postgres
+        LANG: en_US.utf8
+      command: /bin/bash /init-pg.sh
+      secrets:
+        - postgres_password
+
+    postgresql3:
+      build: .
+      container_name: postgresql3
+      hostname: postgresql3
+      restart: always
+      volumes:
+      - ./init-pg.sh:/init-pg.sh:ro
+      - ./volumes/postgresql3/db:/var/lib/postgresql
+      - ./volumes/postgresql3/conf:/etc/postgresql
+      - shared-keys:/shared-keys
+      ports:
+      - "5442:5432"
+      - "2242:22"
+      networks:
+      - postgresql_network
+      environment:
+        POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+        POSTGRES_USER: postgres
+        POSTGRES_DB: postgres
+        LANG: en_US.utf8
+      command: /bin/bash /init-pg.sh
+      secrets:
+        - postgres_password
+
+volumes:
+  shared-keys:
+
+networks:
+  postgresql_network:
+    external: true
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
