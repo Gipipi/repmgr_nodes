@@ -110,6 +110,7 @@ update_postgres_conf "shared_preload_libraries" "'repmgr'" "$PG_CONFIG"
 
 echo "Configuration de pg_hba.conf pour la réplication :"
 ensure_pg_hba_rule "host replication repmgr 172.0.0.0/8 scram-sha-256" "$PG_HBA"
+ensure_pg_hba_rule "host replication repmgr 192.0.0.0/8 scram-sha-256" "$PG_HBA"
 
 echo "Redémarrage de PostgreSQL pour appliquer les modifications :"
 service postgresql restart
@@ -145,7 +146,7 @@ echo "Nombre de clés autorisées: $(wc -l < /var/lib/postgresql/.ssh/authorized
 
 echo "Création du fichier de configuration repmgr.conf :"
 #si le noeud n'est pas le witness alors on passe cette conf
-if [ -n "${WITNESSHOST}" ]; then
+if [ "$HOSTNAME" != "$WITNESSHOST" ]; then
     cat > "$REPMGRCONF" <<EOF
 node_id=${NODEID}
 node_name=${HOSTNAME}

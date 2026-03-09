@@ -113,24 +113,32 @@ export PGDATABASE=postgres
 
 #ajout user postgres en sudoers si le user n'y est pas déjà
 echo "ajout user postgres en sudoers"
-echo "postgres ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
+grep -qxF "postgres ALL=(ALL) NOPASSWD:ALL" /etc/sudoers \
+  || echo "postgres ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+  
 echo "8. Initialisation logique (rôles / bases)..."
 
-# Définir le mot de passe postgres
-gosu postgres psql -v ON_ERROR_STOP=1 <<-EOSQL
+# Vérifier si ce nœud est un standby (read-only)
+IS_STANDBY=$(gosu postgres psql -d postgres -Atqc "SELECT pg_is_in_recovery();")
+
+if [ "$IS_STANDBY" = "f" ]; then
+    echo "Nœud primaire détecté — application des DDL..."
+
+    gosu postgres psql -v ON_ERROR_STOP=1 <<-EOSQL
 ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD}';
 EOSQL
 
-# Création de la base si demandée
-if [ -n "${POSTGRES_DB}" ] && [ "${POSTGRES_DB}" != "postgres" ]; then
-    gosu postgres psql -v ON_ERROR_STOP=1 <<-EOSQL
-        SELECT 'CREATE DATABASE ${POSTGRES_DB}'
-        WHERE NOT EXISTS (
-            SELECT FROM pg_database WHERE datname = '${POSTGRES_DB}'
-        )\gexec
+    if [ -n "${POSTGRES_DB}" ] && [ "${POSTGRES_DB}" != "postgres" ]; then
+        gosu postgres psql -v ON_ERROR_STOP=1 <<-EOSQL
+            SELECT 'CREATE DATABASE ${POSTGRES_DB}'
+            WHERE NOT EXISTS (
+                SELECT FROM pg_database WHERE datname = '${POSTGRES_DB}'
+            )\gexec
 EOSQL
-    echo "✓ Base ${POSTGRES_DB} vérifiée"
+        echo "✓ Base ${POSTGRES_DB} vérifiée"
+    fi
+else
+    echo "Nœud standby détecté (pg_is_in_recovery = true) — DDL ignorés (répliqués depuis le primary)"
 fi
 
 # Configuration du service SSH
@@ -225,6 +233,8 @@ echo "Mise à jour de pg_hba.conf"
 PG_HBA=$(gosu postgres psql -d postgres -Atqc "SHOW hba_file;")
 echo "# Allow connection for all docker containers" >> $PG_HBA
 echo "host    all             all             172.0.0.0/8            scram-sha-256" >> $PG_HBA
+echo "# Allow connection for local network" >> $PG_HBA
+echo "host    all             all             192.0.0.0/8            scram-sha-256" >> $PG_HBA
 
 
 echo "11. redémarrage du service PostgreSQL..."
