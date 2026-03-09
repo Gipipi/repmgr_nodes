@@ -97,13 +97,28 @@ else
 fi
 
 echo "7. Configuration de .pgpass..."
-cat > /var/lib/postgresql/.pgpass <<EOF
-*:5432:*:repuser:${POSTGRES_PASSWORD}
-*:5432:*:postgres:${POSTGRES_PASSWORD}
-EOF
+PGPASS="/var/lib/postgresql/.pgpass"
 
-chown postgres:postgres /var/lib/postgresql/.pgpass
-chmod 600 /var/lib/postgresql/.pgpass
+ensure_pgpass_entry() {
+    local entry="$1"
+    if ! grep -qF "$entry" "$PGPASS" 2>/dev/null; then
+        echo "$entry" >> "$PGPASS"
+        echo "  ✓ entrée ajoutée: $entry"
+    else
+        echo "  ✓ entrée déjà présente"
+    fi
+}
+
+touch "$PGPASS"
+ensure_pgpass_entry "*:5432:*:repuser:${POSTGRES_PASSWORD}"
+ensure_pgpass_entry "*:5432:*:postgres:${POSTGRES_PASSWORD}"
+ensure_pgpass_entry "postgresql1:5432:replication:repmgr:${POSTGRES_PASSWORD}"
+ensure_pgpass_entry "postgresql2:5432:replication:repmgr:${POSTGRES_PASSWORD}"
+ensure_pgpass_entry "postgresql3:5432:replication:repmgr:${POSTGRES_PASSWORD}"
+
+chown postgres:postgres "$PGPASS"
+chmod 600 "$PGPASS"
+echo "✓ .pgpass configuré"
 
 echo "✓ .pgpass configuré"
 
@@ -115,7 +130,7 @@ export PGDATABASE=postgres
 echo "ajout user postgres en sudoers"
 grep -qxF "postgres ALL=(ALL) NOPASSWD:ALL" /etc/sudoers \
   || echo "postgres ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-  
+
 echo "8. Initialisation logique (rôles / bases)..."
 
 # Vérifier si ce nœud est un standby (read-only)
