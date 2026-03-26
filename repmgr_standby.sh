@@ -115,6 +115,26 @@ ensure_pg_hba_rule "host replication repmgr 192.0.0.0/8 scram-sha-256" "$PG_HBA"
 echo "Redémarrage de PostgreSQL pour appliquer les modifications :"
 service postgresql restart
 
+# Création immédiate du rôle repmgr et de la base sur le primary
+# (fait ici pour que les standbys puissent se connecter sans attendre la fin du script)
+if [ "$HOSTNAME" = "$PRIMARYHOST" ]; then
+    echo "Création du rôle repmgr et de la base de données replication (primary) :"
+    su - postgres -c "psql -v ON_ERROR_STOP=1" <<SQL
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='repmgr') THEN
+        CREATE ROLE repmgr LOGIN REPLICATION PASSWORD '${REPMGRPASS}';
+        GRANT pg_monitor TO repmgr;
+    END IF;
+END
+\$\$;
+SQL
+    su - postgres -c "psql -v ON_ERROR_STOP=1" <<'SQL'
+SELECT 'CREATE DATABASE replication OWNER repmgr'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'replication')\gexec
+SQL
+fi
+
 echo "Ajout des entrées dans pgpass pour repmgr :"
 ensure_pgpass_entry "$PRIMARYHOST" "$PG_PORT" "replication" "repmgr" "$REPMGRPASS"
 ensure_pgpass_entry "$STANDBYHOST" "$PG_PORT" "replication" "repmgr" "$REPMGRPASS"
@@ -210,12 +230,11 @@ REPMGRD_USER=postgres
 EOF
 
 
-# Création du user repmgr et de la base de données replication pour le primary et le witness
-if [ "$HOSTNAME" = "$PRIMARYHOST" ] || [ "$HOSTNAME" = "$WITNESSHOST" ]; then
-    echo "Création du rôle repmgr et de la base de données replication :"
-    
+# Création du user repmgr et de la base de données replication pour le witness
+if [ "$HOSTNAME" = "$WITNESSHOST" ]; then
+    echo "Création du rôle repmgr et de la base de données replication (witness) :"
+
     # Création du rôle repmgr
-    # HINT: grant pg_checkpoint role to repmgr user
     su - postgres -c "psql -v ON_ERROR_STOP=1" <<SQL
 DO \$\$
 BEGIN
