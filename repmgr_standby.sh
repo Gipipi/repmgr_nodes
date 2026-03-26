@@ -170,7 +170,7 @@ if [ "$HOSTNAME" != "$WITNESSHOST" ]; then
     cat > "$REPMGRCONF" <<EOF
 node_id=${NODEID}
 node_name=${HOSTNAME}
-conninfo='host=${HOSTNAME} port=${PG_PORT} user=repmgr dbname=replication passfile=${PGPASS}'
+conninfo='host=${HOSTNAME} port=${PG_PORT} user=repmgr dbname=replication passfile=${PGPASS} sslmode=disable'
 data_directory='${PGDATA}'
 pg_bindir='${PGBINDDIR}'
 use_replication_slots=yes
@@ -188,7 +188,7 @@ else
     cat > "$REPMGRCONF" <<EOF    
 node_id=${NODEID}
 node_name=${HOSTNAME}
-conninfo='host=${HOSTNAME} port=${PG_PORT} user=repmgr dbname=replication passfile=${PGPASS}'
+conninfo='host=${HOSTNAME} port=${PG_PORT} user=repmgr dbname=replication passfile=${PGPASS} sslmode=disable'
 data_directory='${PGDATA}'
 pg_bindir='${PGBINDDIR}'
 failover=automatic
