@@ -323,6 +323,9 @@ stdout_logfile_maxbytes=0
 stderr_logfile=/dev/null
 SUPCONF
 
+echo "12. Configuration repmgr (rôles, bases, enregistrement)..."
+/scripts/repmgr_standby.sh
+
 # supervisord remplace tail -f et supervise repmgrd
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/repmgrd.conf
 

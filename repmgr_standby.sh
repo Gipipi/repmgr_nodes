@@ -270,6 +270,21 @@ elif [ "$HOSTNAME" = "$STANDBYHOST" ]; then
     # Clone & register du standby
     # ------------------------------------------------------------------
 
+    echo "Attente que le rôle repmgr soit prêt sur le primary ${PRIMARYHOST}..."
+    for i in $(seq 1 60); do
+        ROLE_EXISTS=$(PGPASSFILE="$PGPASS" psql -h "$PRIMARYHOST" -p "$PG_PORT" -U repmgr -d replication -Atqc "SELECT 1" 2>/dev/null)
+        if [ "$ROLE_EXISTS" = "1" ]; then
+            echo "  ✓ Primary prêt"
+            break
+        fi
+        echo "  [$i/60] Primary pas encore prêt, nouvelle tentative dans 5s..."
+        sleep 5
+        if [ "$i" -eq 60 ]; then
+            echo "ERREUR: Le primary n'est pas devenu disponible après 5 minutes"
+            exit 1
+        fi
+    done
+
     echo "Clone du standby depuis le primary :"
     echo "Arrêt de PostgreSQL pour le clone..."
     service postgresql stop
@@ -316,6 +331,21 @@ elif [ "$HOSTNAME" = "$STANDBYHOST" ]; then
     echo "STANDBY configuré."
 
 elif [ "$HOSTNAME" = "$WITNESSHOST" ]; then
+    echo "Attente que le rôle repmgr soit prêt sur le primary ${PRIMARYHOST}..."
+    for i in $(seq 1 60); do
+        ROLE_EXISTS=$(PGPASSFILE="$PGPASS" psql -h "$PRIMARYHOST" -p "$PG_PORT" -U repmgr -d replication -Atqc "SELECT 1" 2>/dev/null)
+        if [ "$ROLE_EXISTS" = "1" ]; then
+            echo "  ✓ Primary prêt"
+            break
+        fi
+        echo "  [$i/60] Primary pas encore prêt, nouvelle tentative dans 5s..."
+        sleep 5
+        if [ "$i" -eq 60 ]; then
+            echo "ERREUR: Le primary n'est pas devenu disponible après 5 minutes"
+            exit 1
+        fi
+    done
+
     echo "Configuration du witness"
     su - postgres -c 'repmgr -f /etc/postgresql/18/main/repmgr.conf witness register -h postgresql1  -S postgres'
     su - postgres -c 'repmgr -f /etc/postgresql/18/main/repmgr.conf cluster show'
