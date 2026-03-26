@@ -201,28 +201,12 @@ chmod 664 /var/log/repmgr/repmgr.log
 
 # configuration & activation du daemon repmgrd sur tous les noeuds
 
+# repmgrd est géré par supervisord (lancé dans init-pg.sh)
+# on désactive le démarrage via init.d pour éviter les conflits
 cat > /etc/default/repmgrd <<EOF
-# default settings for repmgrd. This file is source by /bin/sh from
-# /etc/init.d/repmgrd
-
-# disable repmgrd by default so it won't get started upon installation
-# valid values: yes/no
-REPMGRD_ENABLED=yes
-
-# configuration file (required)
-REPMGRD_CONF=${REPMGRCONF} 
-
-# additional options
-#REPMGRD_OPTS="--daemonize=false"
-
-# user to run repmgrd as
+REPMGRD_ENABLED=no
+REPMGRD_CONF=${REPMGRCONF}
 REPMGRD_USER=postgres
-
-# repmgrd binary
-#REPMGRD_BIN=/usr/bin/repmgrd
-
-# pid file
-#REPMGRD_PIDFILE=/var/run/repmgrd.pid
 EOF
 
 
@@ -318,6 +302,10 @@ elif [ "$HOSTNAME" = "$WITNESSHOST" ]; then
     su - postgres -c 'repmgr -f /etc/postgresql/18/main/repmgr.conf cluster show'
 fi
 
-echo "Start du daemon repmgrd"
-service repmgrd start
-echo "repmgr configuré."
+echo "repmgr configuré. Attente du démarrage de repmgrd par supervisord..."
+sleep 5
+if pgrep -x repmgrd > /dev/null; then
+    echo "  ✓ repmgrd est démarré (PID: $(pgrep -x repmgrd))"
+else
+    echo "  ⚠ repmgrd pas encore démarré (supervisord le relancera automatiquement)"
+fi

@@ -17,7 +17,8 @@ apt-get install -y \
     openssh-server \
     rsync \
     sudo \
-    locales
+    locales \
+    supervisor
 
 # Générer les locales nécessaires
 echo "Génération des locales..."
@@ -265,6 +266,63 @@ echo "Cluster : /var/lib/postgresql/18/main"
 echo "Config  : /etc/postgresql/18/main"
 echo "========================================="
 
-# Laisser le service tourner (container-friendly)
-exec tail -f /var/log/postgresql/postgresql-18-main.log
+# Créer les répertoires de logs
+mkdir -p /var/log/repmgr /var/log/supervisor
+chown postgres:postgres /var/log/repmgr
+
+# Wrapper : attend PostgreSQL et repmgr.conf avant de lancer repmgrd
+cat > /usr/local/bin/repmgrd-start.sh <<'WRAPPER'
+#!/bin/bash
+REPMGRCONF="/etc/postgresql/18/main/repmgr.conf"
+
+# Attendre que le nœud soit enregistré (repmgr.conf créé par repmgr_standby.sh)
+while [ ! -f "$REPMGRCONF" ]; do
+    echo "$(date): repmgr.conf absent, nœud pas encore enregistré, attente..."
+    sleep 10
+done
+
+# Attendre que PostgreSQL soit prêt
+until pg_isready -q; do
+    echo "$(date): PostgreSQL pas encore prêt, attente..."
+    sleep 2
+done
+
+echo "$(date): PostgreSQL prêt, démarrage de repmgrd..."
+exec /usr/bin/repmgrd -f "$REPMGRCONF" --daemonize=false
+WRAPPER
+chmod +x /usr/local/bin/repmgrd-start.sh
+
+# Configuration supervisord
+mkdir -p /etc/supervisor/conf.d
+cat > /etc/supervisor/conf.d/repmgrd.conf <<'SUPCONF'
+[supervisord]
+nodaemon=true
+logfile=/dev/stdout
+logfile_maxbytes=0
+pidfile=/var/run/supervisord.pid
+loglevel=info
+
+[program:repmgrd]
+command=/usr/local/bin/repmgrd-start.sh
+user=postgres
+autostart=true
+autorestart=true
+startretries=999
+startsecs=3
+stdout_logfile=/var/log/repmgr/repmgr.log
+stdout_logfile_maxbytes=50MB
+stderr_logfile=/var/log/repmgr/repmgr.log
+stderr_logfile_maxbytes=50MB
+
+[program:postgresql-log]
+command=/usr/bin/tail -n 0 -f /var/log/postgresql/postgresql-18-main.log
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/null
+SUPCONF
+
+# supervisord remplace tail -f et supervise repmgrd
+exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/repmgrd.conf
 
